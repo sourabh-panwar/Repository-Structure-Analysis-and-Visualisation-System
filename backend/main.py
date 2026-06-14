@@ -1,13 +1,12 @@
-import database
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import os
+from pydantic import BaseModel 
 from dotenv import load_dotenv
+from google import genai
 
 load_dotenv()
-
-from google import genai
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY")) 
 
 app = FastAPI()
 
@@ -19,10 +18,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class AnalyzeRequest(BaseModel):
+    file_path: str
+
 def scan_project(directory_to_scan):
     nodes = []
     edges = []
     file_list = []
+
+    if not os.path.exists(directory_to_scan):
+        return {"error": "Directory does not exist"}
 
     for root, dirs, files in os.walk(directory_to_scan):
         if "venv" in root or "__pycache__" in root or "node_modules" in root or ".git" in root:
@@ -45,7 +50,8 @@ def scan_project(directory_to_scan):
         nodes.append({
             "id": file_name,
             "label": file_name,
-            "lines_of_code": loc
+            "lines_of_code": loc,
+            "full_path": file_path 
         })
 
         for line in lines:
@@ -72,23 +78,14 @@ def scan_project(directory_to_scan):
     return {"nodes": nodes, "edges": unique_edges}
 
 @app.get("/api/map")
-def get_architecture_map():
-    return scan_project(".") 
+def get_architecture_map(path: str = "."):
+    return scan_project(path) 
 
-@app.get("/api/analyze/{file_id}")
-async def analyze_file(file_id: str):
+@app.post("/api/analyze")
+async def analyze_file(request: AnalyzeRequest):
     try:
-        code_text = ""
-        for root, dirs, files in os.walk("."):
-            if "venv" in root or "node_modules" in root:
-                continue
-            if file_id in files:
-                with open(os.path.join(root, file_id), "r", encoding="utf-8") as f:
-                    code_text = f.read()
-                break
-        
-        if not code_text:
-             return {"summary": "Could not read the file contents."}
+        with open(request.file_path, "r", encoding="utf-8") as f:
+            code_text = f.read()
 
         prompt = f"Explain what this code does in 3 simple sentences. Do not use technical jargon if possible:\n\n{code_text}"
         
