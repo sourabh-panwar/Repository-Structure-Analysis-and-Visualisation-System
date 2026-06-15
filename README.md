@@ -16,7 +16,17 @@ Repo Analyzer is an enterprise-grade developer tool designed to solve the "Graph
 * Python 3.9+
 * Node.js v18+
 
-### 1. Start the Backend (FastAPI)
+# How to Setup--
+
+### 1: Setting up the AI Auditor (Gemini API)
+To use the "Ask AI" features (Find Bugs, Explain Code), you need to configure the backend with a Google Gemini API key.
+1. Get a free API key from [Google AI Studio](https://aistudio.google.com/).
+2. In the `backend` folder of this project, create a new file named `.env`.
+3. Open the `.env` file and add your API key like this:
+   ```env
+   GEMINI_API_KEY=your_actual_api_key_here
+
+### 2. Start the Backend (FastAPI)
 1. Open a terminal and navigate to the `backend` folder.
 2. Create a virtual environment (optional but recommended): `python -m venv venv`
 3. Activate the environment: `source venv/bin/activate` (Mac/Linux) or `venv\Scripts\activate` (Windows)
@@ -28,7 +38,7 @@ Repo Analyzer is an enterprise-grade developer tool designed to solve the "Graph
 
    The backend will run on http://127.0.0.1:8000. You can view the API documentation at http://127.0.0.1:8000/docs.
 
-2. Start the Frontend (React/Vite)
+### 3. Start the Frontend (React/Vite)
 Step 1: Navigate to the Workspace
 Open a new terminal and enter the frontend directory:
 
@@ -51,7 +61,7 @@ npm run dev
 Step 4: View the Application
 Open your browser and navigate to http://localhost:5173.
 
-💡 Assumptions & Additional Features
+### 💡 Assumptions & Additional Features
 Assumption - Local Execution: The tool assumes it is running locally on a developer's machine and has read access to the absolute file paths provided in the search bar.
 
 Additional Feature - Visual Segregation: The app purposely uses distinct geometric routing for the graph: smoothstep (right angles) for structural folder hierarchies, and bezier (curved arcs) for cross-file dependencies, creating immediate visual clarity.
