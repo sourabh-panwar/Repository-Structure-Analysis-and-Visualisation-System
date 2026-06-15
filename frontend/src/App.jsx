@@ -4,7 +4,6 @@ import dagre from 'dagre';
 import 'reactflow/dist/style.css';
 
 import RepoNode from './components/RepoNode';
-import Navbar from './components/Navbar';
 import Sidebar from './components/Sidebar';
 
 const getLayoutedElements = (nodes, edges, direction = 'LR') => {
@@ -46,7 +45,7 @@ export default function App() {
   const [showDeps, setShowDeps] = useState(true);
 
   const [selectedNode, setSelectedNode] = useState(null);
-  const [activeTab, setActiveTab] = useState('code');
+  const [activeTab, setActiveTab] = useState('overview');
   const [fileCode, setFileCode] = useState("");
   
   const [aiQuery, setAiQuery] = useState("");
@@ -107,7 +106,11 @@ export default function App() {
       }
 
       return {
-        id: edge.id, source: edge.source, target: edge.target, type: 'smoothstep', animated: edge.edge_type === 'dependency',
+        id: edge.id, 
+        source: edge.source, 
+        target: edge.target, 
+        type: edge.edge_type === 'dependency' ? 'default' : 'smoothstep', 
+        animated: edge.edge_type === 'dependency',
         edge_type: edge.edge_type, 
         markerEnd: edge.edge_type === 'dependency' ? { type: MarkerType.ArrowClosed, color: '#3498db' } : undefined,
         style: { 
@@ -147,7 +150,7 @@ export default function App() {
 
         const formattedNodes = data.nodes.map(node => ({
           id: node.id,
-          data: { name: node.label, type: node.type, full_path: node.full_path, lines_of_code: node.lines_of_code, description: node.description }
+          data: { name: node.label, type: node.type, full_path: node.full_path, lines_of_code: node.lines_of_code, profile: node.profile }
         }));
 
         setRawNodes(formattedNodes);
@@ -172,7 +175,7 @@ export default function App() {
       });
     } else {
       setSelectedNode(node.data);
-      setActiveTab('code');
+      setActiveTab('overview');
       setFileCode("Loading code...");
       setAiResponse("");
       setAiQuery("");
@@ -203,17 +206,96 @@ export default function App() {
   };
 
   return (
-    <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#2f3640', fontFamily: 'Inter, sans-serif' }}>
-      <Navbar repoPath={repoPath} setRepoPath={setRepoPath} handleScan={handleScan} isScanning={isScanning} showDeps={showDeps} setShowDeps={setShowDeps} />
-      <div style={{ flexGrow: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ flexGrow: 1, position: 'relative' }}>
-          <ReactFlow nodeTypes={nodeTypes} nodes={nodes} edges={edges} onNodeClick={onNodeClick} fitView minZoom={0.05}>
-            <Background color="#718093" gap={20} size={1.5} />
-            <Controls style={{ background: '#1e272e', border: '1px solid #485460', fill: '#f5f6fa' }} />
-          </ReactFlow>
+    <>
+      <style>{`
+        body, html, #root {
+          margin: 0 !important;
+          padding: 0 !important;
+          width: 100vw !important;
+          height: 100vh !important;
+          overflow: hidden !important;
+          box-sizing: border-box !important;
+        }
+        * {
+          box-sizing: inherit;
+        }
+      `}</style>
+
+      <div style={{ width: '100vw', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#111418', fontFamily: 'Inter, sans-serif', overflow: 'hidden' }}>
+        
+        <div style={{ padding: '15px 30px', backgroundColor: '#111418', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+            <h1 style={{ margin: 0, fontSize: '1.2rem', color: '#f5f6fa', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <span style={{ color: '#3498db' }}>🧩</span> Repo Analyzer
+            </h1>
+            
+            <button 
+              onClick={() => setShowDeps(!showDeps)}
+              style={{ 
+                fontSize: '12px', 
+                padding: '6px 12px', 
+                backgroundColor: showDeps ? '#2f3640' : '#3498db', 
+                color: showDeps ? '#7f8fa6' : 'white', 
+                border: 'none', 
+                borderRadius: '20px', 
+                cursor: 'pointer', 
+                fontWeight: 'bold', 
+                transition: '0.3s' 
+              }}
+            >
+              🔗 {showDeps ? 'Hide Dependencies' : 'Show Dependencies'}
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', gap: '15px', width: '50%' }}>
+            <input 
+              type="text" 
+              value={repoPath}
+              onChange={(e) => setRepoPath(e.target.value)}
+              placeholder="Paste absolute path (e.g. D:\projects\my-app)"
+              style={{ flexGrow: 1, padding: '10px 15px', borderRadius: '12px', border: '1px solid #353b48', background: '#2f3640', color: '#f5f6fa', outline: 'none' }}
+            />
+            <button 
+              onClick={handleScan} 
+              disabled={isScanning} 
+              style={{ padding: '10px 20px', backgroundColor: isScanning ? '#7f8fa6' : '#3498db', color: 'white', border: 'none', borderRadius: '12px', cursor: isScanning ? 'not-allowed' : 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              {isScanning ? 'Scanning...' : 'Scan'}
+            </button>
+          </div>
         </div>
-        <Sidebar selectedNode={selectedNode} closePanel={() => setSelectedNode(null)} activeTab={activeTab} setActiveTab={setActiveTab} fileCode={fileCode} aiQuery={aiQuery} setAiQuery={setAiQuery} handleAskAi={handleAskAi} aiResponse={aiResponse} isAiLoading={isAiLoading} />
+
+        <div style={{ 
+          flexGrow: 1, 
+          display: 'flex', 
+          position: 'relative', 
+          overflow: 'hidden',
+          margin: '0 20px 20px 20px',   
+          backgroundColor: '#2f3640',   
+          borderRadius: '16px',         
+          border: '1px solid #2f3640',
+          boxShadow: '0 10px 30px rgba(0,0,0,0.5)' 
+        }}>
+          
+          <div style={{ flexGrow: 1, position: 'relative' }}>
+            <ReactFlow 
+              nodeTypes={nodeTypes} 
+              nodes={nodes} 
+              edges={edges} 
+              onNodeClick={onNodeClick} 
+              fitView 
+              minZoom={0.05}
+              proOptions={{ hideAttribution: true }} 
+            >
+              <Background color="#718093" gap={20} size={1.5} />
+              <Controls position="bottom-left" />
+            </ReactFlow>
+          </div>
+
+          <Sidebar selectedNode={selectedNode} closePanel={() => setSelectedNode(null)} activeTab={activeTab} setActiveTab={setActiveTab} fileCode={fileCode} aiQuery={aiQuery} setAiQuery={setAiQuery} handleAskAi={handleAskAi} aiResponse={aiResponse} isAiLoading={isAiLoading} />
+        
+        </div>
       </div>
-    </div>
+    </>
   );
 }

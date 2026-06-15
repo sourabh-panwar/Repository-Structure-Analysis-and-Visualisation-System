@@ -42,7 +42,6 @@ export default function RepoNode({ data }) {
         </div>
       </div>
 
-      {/* The LoC Badge */}
       {data.type === 'file' && (
         <div style={{
           background: isHighLoc ? '#ff4757' : '#2ed573',

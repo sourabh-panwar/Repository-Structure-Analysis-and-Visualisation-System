@@ -1,9 +1,31 @@
-backend/venv/
-backend/__pycache__/
-backend/.env
+__pycache__/
+*.py[cod]
+*$py.class
 
-frontend/node_modules/
-frontend/dist/
+venv/
+env/
+.env
+
+ai_cache.json
+
+node_modules/
+dist/
+build/
+.npm/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 .DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
 Thumbs.db
+
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

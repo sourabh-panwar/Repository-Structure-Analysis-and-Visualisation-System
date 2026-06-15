@@ -35,7 +35,7 @@ def analyze_code_with_cache(file_path, user_prompt, api_key):
             pass
 
     if cache_key in cache:
-        return cache[cache_key] + "\n\n*(⚡ Served instantly from local hash cache)*"
+        return cache[cache_key] + "\n\n*(Served from local hash cache)*"
 
     client = genai.Client(api_key=api_key)
     prompt = f"Here is the content of the file:\n\n{code_text}\n\nUser's Question: {user_prompt}"

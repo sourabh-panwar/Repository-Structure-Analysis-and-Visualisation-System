@@ -34,9 +34,9 @@ def scan_project(directory_to_scan):
             except Exception:
                 loc = 0 
 
-            description = get_python_profile(file_path) if f.endswith('.py') else get_js_profile(file_path)
+            profile_data = get_python_profile(file_path) if f.endswith('.py') else get_js_profile(file_path)
 
-            nodes.append({"id": file_path, "label": f, "type": "file", "lines_of_code": loc, "full_path": file_path, "description": description})
+            nodes.append({"id": file_path, "label": f, "type": "file", "lines_of_code": loc, "full_path": file_path, "profile": profile_data})
             edges.append({"id": f"struct_{root}_{file_path}", "source": root, "target": file_path, "edge_type": "structure"})
 
     for node in nodes:
