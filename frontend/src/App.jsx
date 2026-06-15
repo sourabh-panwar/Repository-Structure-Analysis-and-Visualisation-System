@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import ReactFlow, { Background, Controls, MarkerType } from 'reactflow'; 
+import ReactFlow, { Background, Controls, MarkerType } from 'reactflow';
 import dagre from 'dagre';
 import 'reactflow/dist/style.css';
 
@@ -10,17 +10,23 @@ import Sidebar from './components/Sidebar';
 const getLayoutedElements = (nodes, edges, direction = 'LR') => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  dagreGraph.setGraph({ rankdir: direction, ranksep: 200, nodesep: 50 }); 
+  dagreGraph.setGraph({ rankdir: direction, ranksep: 220, nodesep: 60 }); 
 
-  nodes.forEach((node) => dagreGraph.setNode(node.id, { width: 250, height: 80 }));
-  edges.forEach((edge) => dagreGraph.setEdge(edge.source, edge.target));
+  nodes.forEach((node) => dagreGraph.setNode(node.id, { width: 260, height: 80 }));
+  
+  edges.forEach((edge) => {
+    if (edge.edge_type === 'structure') {
+      dagreGraph.setEdge(edge.source, edge.target);
+    }
+  });
+  
   dagre.layout(dagreGraph);
 
   nodes.forEach((node) => {
     const nodeWithPosition = dagreGraph.node(node.id);
     node.targetPosition = 'left';
     node.sourcePosition = 'right';
-    node.position = { x: nodeWithPosition.x - 125, y: nodeWithPosition.y - 40 };
+    node.position = { x: nodeWithPosition.x - 130, y: nodeWithPosition.y - 40 };
     return node;
   });
   return { nodes, edges };
@@ -37,6 +43,8 @@ export default function App() {
   const [expandedFolders, setExpandedFolders] = useState(new Set());
   const [anchorNode, setAnchorNode] = useState(null); 
   
+  const [showDeps, setShowDeps] = useState(true);
+
   const [selectedNode, setSelectedNode] = useState(null);
   const [activeTab, setActiveTab] = useState('code');
   const [fileCode, setFileCode] = useState("");
@@ -66,7 +74,7 @@ export default function App() {
     });
 
     rawEdges.filter(e => e.edge_type === 'dependency').forEach(edge => {
-      if (visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)) {
+      if (showDeps && visibleNodeIds.has(edge.source) && visibleNodeIds.has(edge.target)) {
         visibleEdges.push(edge);
       }
     });
@@ -82,9 +90,7 @@ export default function App() {
 
     const flowNodes = rawNodes.filter(n => visibleNodeIds.has(n.id)).map(node => {
       let opacity = 1;
-      if (selectedNode && node.type === 'file') {
-        opacity = connectedIds.has(node.id) ? 1 : 0.2;
-      }
+      if (selectedNode && node.type === 'file') opacity = connectedIds.has(node.id) ? 1 : 0.2;
 
       return {
         id: node.id,
@@ -101,18 +107,14 @@ export default function App() {
       }
 
       return {
-        id: edge.id, 
-        source: edge.source, 
-        target: edge.target, 
-        type: 'smoothstep', 
-        animated: edge.edge_type === 'dependency',
+        id: edge.id, source: edge.source, target: edge.target, type: 'smoothstep', animated: edge.edge_type === 'dependency',
+        edge_type: edge.edge_type, 
         markerEnd: edge.edge_type === 'dependency' ? { type: MarkerType.ArrowClosed, color: '#3498db' } : undefined,
         style: { 
           stroke: edge.edge_type === 'structure' ? '#718093' : '#3498db', 
           strokeWidth: edge.edge_type === 'structure' ? 2 : 2.5,
           strokeDasharray: edge.edge_type === 'dependency' ? '5,5' : '0',
-          transition: 'opacity 0.3s ease',
-          opacity
+          transition: 'opacity 0.3s ease', opacity
         }
       };
     });
@@ -124,16 +126,13 @@ export default function App() {
       if (newAnchorPos) {
         const dx = anchorNode.x - newAnchorPos.position.x;
         const dy = anchorNode.y - newAnchorPos.position.y;
-        layoutedNodes.forEach(n => {
-          n.position.x += dx;
-          n.position.y += dy;
-        });
+        layoutedNodes.forEach(n => { n.position.x += dx; n.position.y += dy; });
       }
     }
 
     setNodes(layoutedNodes);
     setEdges(layoutedEdges);
-  }, [rawNodes, rawEdges, expandedFolders, selectedNode]); 
+  }, [rawNodes, rawEdges, expandedFolders, selectedNode, showDeps]); 
 
   const handleScan = () => {
     setIsScanning(true);
@@ -148,7 +147,7 @@ export default function App() {
 
         const formattedNodes = data.nodes.map(node => ({
           id: node.id,
-          data: { name: node.label, type: node.type, full_path: node.full_path, lines_of_code: node.lines_of_code }
+          data: { name: node.label, type: node.type, full_path: node.full_path, lines_of_code: node.lines_of_code, description: node.description }
         }));
 
         setRawNodes(formattedNodes);
@@ -168,8 +167,7 @@ export default function App() {
       setAnchorNode({ id: node.id, x: node.position.x, y: node.position.y });
       setExpandedFolders(prev => {
         const next = new Set(prev);
-        if (next.has(node.id)) next.delete(node.id);
-        else next.add(node.id);
+        if (next.has(node.id)) next.delete(node.id); else next.add(node.id);
         return next;
       });
     } else {
@@ -198,14 +196,7 @@ export default function App() {
     setAiResponse("Analyzing codebase...");
     setAiQuery(promptToUse); 
 
-    fetch(`http://127.0.0.1:8000/api/analyze`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        file_path: selectedNode.full_path,
-        user_prompt: promptToUse
-      })
-    })
+    fetch(`http://127.0.0.1:8000/api/analyze`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_path: selectedNode.full_path, user_prompt: promptToUse }) })
       .then(response => response.json())
       .then(data => { setAiResponse(data.summary); setIsAiLoading(false); })
       .catch(() => { setAiResponse("Failed to connect to AI."); setIsAiLoading(false); });
@@ -213,7 +204,7 @@ export default function App() {
 
   return (
     <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#2f3640', fontFamily: 'Inter, sans-serif' }}>
-      <Navbar repoPath={repoPath} setRepoPath={setRepoPath} handleScan={handleScan} isScanning={isScanning} />
+      <Navbar repoPath={repoPath} setRepoPath={setRepoPath} handleScan={handleScan} isScanning={isScanning} showDeps={showDeps} setShowDeps={setShowDeps} />
       <div style={{ flexGrow: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
         <div style={{ flexGrow: 1, position: 'relative' }}>
           <ReactFlow nodeTypes={nodeTypes} nodes={nodes} edges={edges} onNodeClick={onNodeClick} fitView minZoom={0.05}>
@@ -221,18 +212,7 @@ export default function App() {
             <Controls style={{ background: '#1e272e', border: '1px solid #485460', fill: '#f5f6fa' }} />
           </ReactFlow>
         </div>
-        <Sidebar 
-          selectedNode={selectedNode}
-          closePanel={() => setSelectedNode(null)}
-          activeTab={activeTab}
-          setActiveTab={setActiveTab}
-          fileCode={fileCode}
-          aiQuery={aiQuery}
-          setAiQuery={setAiQuery}
-          handleAskAi={handleAskAi}
-          aiResponse={aiResponse}
-          isAiLoading={isAiLoading}
-        />
+        <Sidebar selectedNode={selectedNode} closePanel={() => setSelectedNode(null)} activeTab={activeTab} setActiveTab={setActiveTab} fileCode={fileCode} aiQuery={aiQuery} setAiQuery={setAiQuery} handleAskAi={handleAskAi} aiResponse={aiResponse} isAiLoading={isAiLoading} />
       </div>
     </div>
   );

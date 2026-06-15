@@ -1,56 +1,124 @@
 import ast
 import re
 
-def parse_python_ast(file_path, file_map):
-    """
-    Reads the file as an Abstract Syntax Tree (AST) to find 100% accurate imports.
-    Ignores comments, strings, and variable names.
-    """
-    dependencies = []
+
+def get_python_profile(file_path):
+    """Extracts top-level comments AND classes/functions to build a complete profile."""
     try:
         with open(file_path, "r", encoding="utf-8") as f:
             source_code = f.read()
-            
+
         tree = ast.parse(source_code)
+        docstring = ast.get_docstring(tree)
         
+        if not docstring:
+            comments = []
+            for line in source_code.split('\n')[:30]: 
+                clean_line = line.strip()
+                if clean_line.startswith('#'):
+                    if not clean_line.startswith('#!') and 'coding:' not in clean_line:
+                        comments.append(clean_line.lstrip('#').strip())
+                elif clean_line and not clean_line.startswith(('import', 'from')):
+                    break
+            
+            if comments:
+                docstring = " ".join(comments)
+
+        classes = []
+        functions = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef):
+                classes.append(node.name)
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if not node.name.startswith('__'): 
+                    functions.append(node.name)
+        
+        profile = []
+        if docstring:
+            profile.append(f"📝 {docstring[:120]}..." if len(docstring) > 120 else f"📝 {docstring}")
+            
+        if classes:
+            profile.append(f"📦 Classes: {', '.join(classes[:3])}" + ("..." if len(classes)>3 else ""))
+        if functions:
+            profile.append(f"⚙️ Functions: {', '.join(functions[:5])}" + ("..." if len(functions)>5 else ""))
+            
+        if profile:
+            return " | ".join(profile)
+            
+        return "📄 Script or config file (No comments or major functions detected)."
+    except Exception:
+        return "⚠️ Syntax Error or Unreadable File."
+
+def get_js_profile(file_path):
+    """Extracts top-level JS comments AND JS/React functions/classes."""
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+            
+        docstring = None
+        match = re.search(r'^\s*/\*\*(.*?)\*/', content, re.DOTALL)
+        if match:
+            docstring = match.group(1).strip()
+            docstring = re.sub(r'^\s*\*\s?', '', docstring, flags=re.MULTILINE)
+            docstring = re.sub(r'\s+', ' ', docstring) 
+        else:
+            comments = []
+            for line in content.split('\n')[:30]:
+                clean_line = line.strip()
+                if clean_line.startswith('//'):
+                    comments.append(clean_line.lstrip('/').strip())
+                elif clean_line and not clean_line.startswith('import'):
+                    break
+            if comments:
+                docstring = " ".join(comments)
+                
+        classes = re.findall(r'class\s+([A-Z][a-zA-Z0-9_]*)', content)
+        functions = re.findall(r'(?:function\s+([a-zA-Z0-9_]+)\s*\(|const\s+([a-zA-Z0-9_]+)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[a-zA-Z0-9_]+)\s*=>)', content)
+        functions = [f[0] or f[1] for f in functions if f[0] or f[1]]
+
+        profile = []
+        if docstring:
+             profile.append(f"📝 {docstring[:120]}..." if len(docstring) > 120 else f"📝 {docstring}")
+        if classes:
+            profile.append(f"📦 Components/Classes: {', '.join(classes[:3])}" + ("..." if len(classes)>3 else ""))
+        if functions:
+            profile.append(f"⚙️ Functions: {', '.join(functions[:5])}" + ("..." if len(functions)>5 else ""))
+            
+        if profile:
+            return " | ".join(profile)
+            
+        return "📄 UI Component or utility script."
+    except Exception:
+         return "⚠️ Unreadable File."
+
+
+def parse_python_ast(file_path, file_map):
+    dependencies = []
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            tree = ast.parse(f.read())
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    module_name = alias.name.split('.')[0]
-                    _add_dependency(module_name, file_path, file_map, dependencies)
-            
-            elif isinstance(node, ast.ImportFrom):
-                if node.module:
-                    module_name = node.module.split('.')[0]
-                    _add_dependency(module_name, file_path, file_map, dependencies)
-                    
+                    _add_dependency(alias.name.split('.')[0], file_path, file_map, dependencies)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                    _add_dependency(node.module.split('.')[0], file_path, file_map, dependencies)
     except Exception:
         pass 
-        
     return dependencies
 
 def _add_dependency(module_name, current_file_path, file_map, dependencies):
-    """Helper to check if the imported module exists locally in our project."""
     target_file = f"{module_name}.py"
     if target_file in file_map and file_map[target_file] != current_file_path:
         dependencies.append(file_map[target_file])
 
 def parse_javascript_regex(file_path, file_map):
-    """
-    Python cannot AST-parse JavaScript, so we use an advanced targeted regex.
-    Matches ES6 imports and CommonJS requires.
-    """
     dependencies = []
     import_pattern = re.compile(r'(?:import.*?from|require\s*\()\s*[\'"]([^\'"]+)[\'"]')
-    
     try:
         with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read()
-            matches = import_pattern.findall(content)
-            
-            for match in matches:
+            for match in import_pattern.findall(f.read()):
                 clean_name = match.split('/')[-1] 
-                
                 for ext in ['.js', '.jsx', '.ts', '.tsx']:
                     target_file = f"{clean_name}{ext}"
                     if target_file in file_map and file_map[target_file] != file_path:
@@ -58,5 +126,4 @@ def parse_javascript_regex(file_path, file_map):
                         break
     except Exception:
         pass
-        
     return dependencies
