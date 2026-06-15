@@ -11,7 +11,7 @@ export default function Navbar({ repoPath, setRepoPath, handleScan, isScanning, 
           onClick={() => setShowDeps(!showDeps)}
           style={{ fontSize: '12px', padding: '6px 12px', backgroundColor: showDeps ? '#3498db' : '#2f3640', color: showDeps ? 'white' : '#7f8fa6', border: 'none', borderRadius: '20px', cursor: 'pointer', fontWeight: 'bold', transition: '0.3s' }}
         >
-          🔗 Dependencies {showDeps ? 'ON' : 'OFF'}
+          🔗 {showDeps ? 'Hide Dependencies' : 'Show Dependencies'}
         </button>
       </div>
 
