@@ -1,4 +1,5 @@
 import os
+from .ast_parser import parse_python_ast, parse_javascript_regex
 
 def scan_project(directory_to_scan):
     nodes = []
@@ -45,16 +46,21 @@ def scan_project(directory_to_scan):
             edges.append({"id": f"struct_{root}_{file_path}", "source": root, "target": file_path, "edge_type": "structure"})
 
     for node in nodes:
-        if node["type"] == "file" and node["label"].endswith(('.py', '.js', '.ts', '.jsx', '.tsx')):
-            try:
-                with open(node["full_path"], "r", encoding="utf-8") as f:
-                    lines = f.readlines()
-                    for line in lines:
-                        for filename, filepath in file_map.items():
-                            module_name = os.path.splitext(filename)[0]
-                            if (f"import" in line or f"from" in line or "require(" in line) and module_name in line and filepath != node["full_path"]:
-                                edges.append({"id": f"dep_{node['id']}_{filepath}", "source": node["id"], "target": filepath, "edge_type": "dependency"})
-            except Exception:
-                pass
+        if node["type"] == "file":
+            deps = []
+            
+            if node["label"].endswith('.py'):
+                deps = parse_python_ast(node["full_path"], file_map)
+                
+            elif node["label"].endswith(('.js', '.ts', '.jsx', '.tsx')):
+                deps = parse_javascript_regex(node["full_path"], file_map)
+
+            for target_path in set(deps): 
+                edges.append({
+                    "id": f"dep_{node['id']}_{target_path}",
+                    "source": node["id"],
+                    "target": target_path,
+                    "edge_type": "dependency"
+                })
 
     return {"nodes": nodes, "edges": edges}

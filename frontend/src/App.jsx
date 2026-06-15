@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect } from 'react';
-import ReactFlow, { Background, Controls } from 'reactflow';
+import ReactFlow, { Background, Controls, MarkerType } from 'reactflow'; 
 import dagre from 'dagre';
 import 'reactflow/dist/style.css';
 
@@ -10,12 +10,10 @@ import Sidebar from './components/Sidebar';
 const getLayoutedElements = (nodes, edges, direction = 'LR') => {
   const dagreGraph = new dagre.graphlib.Graph();
   dagreGraph.setDefaultEdgeLabel(() => ({}));
-  
   dagreGraph.setGraph({ rankdir: direction, ranksep: 200, nodesep: 50 }); 
 
   nodes.forEach((node) => dagreGraph.setNode(node.id, { width: 250, height: 80 }));
   edges.forEach((edge) => dagreGraph.setEdge(edge.source, edge.target));
-  
   dagre.layout(dagreGraph);
 
   nodes.forEach((node) => {
@@ -25,7 +23,6 @@ const getLayoutedElements = (nodes, edges, direction = 'LR') => {
     node.position = { x: nodeWithPosition.x - 125, y: nodeWithPosition.y - 40 };
     return node;
   });
-  
   return { nodes, edges };
 };
 
@@ -38,7 +35,6 @@ export default function App() {
   const [repoPath, setRepoPath] = useState("");
   const [isScanning, setIsScanning] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState(new Set());
-  
   const [anchorNode, setAnchorNode] = useState(null); 
   
   const [selectedNode, setSelectedNode] = useState(null);
@@ -75,21 +71,51 @@ export default function App() {
       }
     });
 
-    const flowNodes = rawNodes.filter(n => visibleNodeIds.has(n.id)).map(node => ({
-      id: node.id,
-      type: 'customNode', 
-      data: { ...node.data, isExpanded: expandedFolders.has(node.id) },
-      style: { transition: 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1)' }
-    }));
+    const connectedIds = new Set();
+    if (selectedNode) {
+      connectedIds.add(selectedNode.full_path);
+      rawEdges.forEach(e => {
+        if (e.source === selectedNode.full_path) connectedIds.add(e.target);
+        if (e.target === selectedNode.full_path) connectedIds.add(e.source);
+      });
+    }
 
-    const flowEdges = visibleEdges.map(edge => ({
-      id: edge.id, source: edge.source, target: edge.target, type: 'smoothstep', animated: edge.edge_type === 'dependency', 
-      style: { 
-        stroke: edge.edge_type === 'structure' ? '#718093' : '#3498db', 
-        strokeWidth: edge.edge_type === 'structure' ? 2 : 2.5,
-        strokeDasharray: edge.edge_type === 'dependency' ? '5,5' : '0' 
+    const flowNodes = rawNodes.filter(n => visibleNodeIds.has(n.id)).map(node => {
+      let opacity = 1;
+      if (selectedNode && node.type === 'file') {
+        opacity = connectedIds.has(node.id) ? 1 : 0.2;
       }
-    }));
+
+      return {
+        id: node.id,
+        type: 'customNode', 
+        data: { ...node.data, isExpanded: expandedFolders.has(node.id) },
+        style: { transition: 'transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.3s ease', opacity }
+      };
+    });
+
+    const flowEdges = visibleEdges.map(edge => {
+      let opacity = 1;
+      if (selectedNode && edge.edge_type === 'dependency') {
+        opacity = (edge.source === selectedNode.full_path || edge.target === selectedNode.full_path) ? 1 : 0.05;
+      }
+
+      return {
+        id: edge.id, 
+        source: edge.source, 
+        target: edge.target, 
+        type: 'smoothstep', 
+        animated: edge.edge_type === 'dependency',
+        markerEnd: edge.edge_type === 'dependency' ? { type: MarkerType.ArrowClosed, color: '#3498db' } : undefined,
+        style: { 
+          stroke: edge.edge_type === 'structure' ? '#718093' : '#3498db', 
+          strokeWidth: edge.edge_type === 'structure' ? 2 : 2.5,
+          strokeDasharray: edge.edge_type === 'dependency' ? '5,5' : '0',
+          transition: 'opacity 0.3s ease',
+          opacity
+        }
+      };
+    });
 
     const { nodes: layoutedNodes, edges: layoutedEdges } = getLayoutedElements(flowNodes, flowEdges);
 
@@ -98,7 +124,6 @@ export default function App() {
       if (newAnchorPos) {
         const dx = anchorNode.x - newAnchorPos.position.x;
         const dy = anchorNode.y - newAnchorPos.position.y;
-
         layoutedNodes.forEach(n => {
           n.position.x += dx;
           n.position.y += dy;
@@ -108,7 +133,7 @@ export default function App() {
 
     setNodes(layoutedNodes);
     setEdges(layoutedEdges);
-  }, [rawNodes, rawEdges, expandedFolders]);
+  }, [rawNodes, rawEdges, expandedFolders, selectedNode]); 
 
   const handleScan = () => {
     setIsScanning(true);
@@ -140,9 +165,7 @@ export default function App() {
 
   const onNodeClick = useCallback((event, node) => {
     if (node.data.type === 'folder') {
-      
       setAnchorNode({ id: node.id, x: node.position.x, y: node.position.y });
-
       setExpandedFolders(prev => {
         const next = new Set(prev);
         if (next.has(node.id)) next.delete(node.id);
@@ -190,18 +213,14 @@ export default function App() {
 
   return (
     <div style={{ width: '100%', height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#2f3640', fontFamily: 'Inter, sans-serif' }}>
-      
       <Navbar repoPath={repoPath} setRepoPath={setRepoPath} handleScan={handleScan} isScanning={isScanning} />
-
       <div style={{ flexGrow: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
-        
         <div style={{ flexGrow: 1, position: 'relative' }}>
           <ReactFlow nodeTypes={nodeTypes} nodes={nodes} edges={edges} onNodeClick={onNodeClick} fitView minZoom={0.05}>
             <Background color="#718093" gap={20} size={1.5} />
             <Controls style={{ background: '#1e272e', border: '1px solid #485460', fill: '#f5f6fa' }} />
           </ReactFlow>
         </div>
-
         <Sidebar 
           selectedNode={selectedNode}
           closePanel={() => setSelectedNode(null)}
@@ -214,7 +233,6 @@ export default function App() {
           aiResponse={aiResponse}
           isAiLoading={isAiLoading}
         />
-        
       </div>
     </div>
   );
